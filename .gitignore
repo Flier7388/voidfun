@@ -1,5 +1,23 @@
 /target
 flutter/rust/target/
+/flutter/build/
+/flutter/.dart_tool/
+
+# Local tuwunel test server (local-server/tuwunel.toml is dev-only config,
+# but the database and its log shouldn't be committed either way)
+/local-server/data/
+/local-server/tuwunel.log
+
+# Reference-only clones of other matrix-rust-sdk clients, pulled in for
+# research (see the project memory on `git/`) — not this project's code.
+/git/
+
+# Per-machine Claude Code settings/permissions, not project config.
+/.claude/*local*
+
+# Leftover empty marker from an earlier disk-space debugging session.
+/diskcheck.txt
+
 .idea/
 *.iml
 .flutter-shell-root

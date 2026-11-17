@@ -155,6 +155,22 @@ class _Timeline extends StatelessWidget {
     // previous message's day, which `itemBuilder`'s per-index callback
     // can't cheaply track — same non-builder pattern RoomList already
     // uses for its (similarly bounded) room list.
+    //
+    // Built oldest-to-newest below (same order as `messages`), then
+    // handed to the `ListView` *reversed*, with `reverse: true` to
+    // re-flip it back to the usual chronological top-to-bottom look.
+    // That isn't a no-op: it makes scroll offset 0 mean "the newest
+    // message" instead of "the oldest" — the room's actual bottom,
+    // which `reverse`'s default (false) anchors to the *top* instead.
+    // It also makes that anchor immune to backfill: older history
+    // `ActiveRoomController._backfill` loads later gets prepended to
+    // `messages`, which lands at the *end* of the reversed list — past
+    // the top edge, never disturbing the offset-0 anchor at the
+    // bottom. A `ScrollController.jumpTo(maxScrollExtent)` approach
+    // (tried first) doesn't have this property: each backfilled page
+    // changes `maxScrollExtent` out from under an already-computed
+    // jump, racing whether the next frame's jump lands before the one
+    // after it fires.
     final children = <Widget>[];
     DateTime? lastDay;
     for (var i = 0; i < messages.length; i++) {
@@ -177,8 +193,9 @@ class _Timeline extends StatelessWidget {
       );
     }
     return ListView(
+      reverse: true,
       padding: const EdgeInsets.symmetric(vertical: 16),
-      children: children,
+      children: children.reversed.toList(),
     );
   }
 }

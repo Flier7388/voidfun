@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix_client/src/rust/api/matrix.dart';
 import 'package:matrix_client/widgets/rail_nav.dart';
 
+void _noop() {}
+
 void main() {
   const space = SpaceSummary(
     roomId: '!space:example.org',
@@ -20,6 +22,7 @@ void main() {
     String? activeSpaceId,
     required ValueChanged<RailTab> onSelect,
     required ValueChanged<SpaceSummary> onSelectSpace,
+    VoidCallback onLogout = _noop,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -28,8 +31,10 @@ void main() {
           spaces: [space],
           activeSpaceId: activeSpaceId,
           userId: '@test:example.org',
+          displayName: null,
           onSelect: onSelect,
           onSelectSpace: onSelectSpace,
+          onLogout: onLogout,
         ),
       ),
     );
@@ -78,5 +83,46 @@ void main() {
     await tester.pump();
 
     expect(selectedTab, RailTab.home);
+  });
+
+  testWidgets(
+    'tapping the profile avatar opens a popup instead of switching tabs',
+    (tester) async {
+      RailTab? selectedTab;
+
+      await tester.pumpWidget(
+        buildRail(onSelect: (tab) => selectedTab = tab, onSelectSpace: (_) {}),
+      );
+
+      await tester.tap(find.byTooltip('User Settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Log out'), findsOneWidget);
+      expect(find.text('@test:example.org'), findsOneWidget);
+      // Still showing whatever room/space was open underneath — this
+      // never called onSelect, unlike the old full-screen settings tab.
+      expect(selectedTab, isNull);
+    },
+  );
+
+  testWidgets('tapping Log out in the profile popup calls onLogout', (
+    tester,
+  ) async {
+    var loggedOut = false;
+
+    await tester.pumpWidget(
+      buildRail(
+        onSelect: (_) {},
+        onSelectSpace: (_) {},
+        onLogout: () => loggedOut = true,
+      ),
+    );
+
+    await tester.tap(find.byTooltip('User Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log out'));
+    await tester.pumpAndSettle();
+
+    expect(loggedOut, isTrue);
   });
 }

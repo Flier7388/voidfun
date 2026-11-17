@@ -6,220 +6,336 @@ Scope for this repository is **desktop only: Windows + Linux**, no
 Android/iOS/macOS. A phone client is planned as a **separate repository
 with its own roadmap**, not a milestone in this one.
 
-Each milestone below lists concrete tasks with acceptance criteria.
-Don't start the next milestone's tasks until the current one's criteria
-are actually met — avoid working on several milestones in parallel.
+## Rules
 
-## Current state — verified 2026-11-09
+- Each milestone lists concrete tasks with acceptance criteria. Don't
+  start the next milestone's tasks until the current one's criteria are
+  actually met. Exception: **spikes** (time-boxed experiments, e.g. the
+  call architecture) and CI work may run in parallel; a spike's result
+  is not a milestone task until its acceptance is met.
+- Each milestone carries an area tag: `base`, `security`, `chat`,
+  `spaces`, `media`, `calls`, `quality`.
+- A task is `[x]` only when its acceptance criterion was checked
+  against a real homeserver (and, where stated, a second client such
+  as Element), not just unit-tested.
+- Anything discovered mid-milestone that doesn't fit goes to
+  **Backlog** at the bottom, not into the current milestone.
 
-**Backend** (`crates/matrix-client`, on `matrix-sdk`/`matrix-sdk-ui`
-0.19.1):
-- Login (username/password) and session restore, persisted to disk on
-  the Flutter side.
+## Why this order
+
+1. **Encryption comes before chat features.** Most DMs and private
+   rooms are end-to-end encrypted by default, so replies/reactions/
+   media can't be properly tested without working E2EE first.
+2. **Accounts/onboarding right after.** Registration, invites and
+   joining rooms are needed before anyone but the author can use the
+   app.
+3. **Chat → awareness → room management → media → calls.** Each step
+   builds on the previous one; calls are last because they're the
+   riskiest and least standardized part.
+4. **CI for the Flutter app is early**, not at the end: it's cheap and
+   catches regressions in every later milestone.
+
+## Current state — verified 2026-11-09 (+ fixes through 2026-11-12)
+
+**Backend** (`crates/matrix-client`, `matrix-sdk`/`matrix-sdk-ui` 0.19.1):
+- Login (username/password, bare server name or full URL) and session
+  restore (persisted on the Flutter side).
 - Sync via `SyncService`.
-- Joined room list: snapshot + live updates.
-- Top-level joined spaces: snapshot + live updates. A space's child
-  rooms: snapshot only (no live updates yet).
-- Per-room timeline: snapshot + live updates, plain-text send.
-- Not built yet: replies, reactions, edits, search, read receipts,
-  typing indicators, media (images/files — `matrix-storage` only has
-  cache *retention policy*, no actual download/display path), E2EE
-  verified against a pre-existing encrypted room, voice/video.
+- Joined rooms and top-level spaces: snapshot + live updates. A
+  space's child rooms: snapshot only.
+- Per-room timeline: snapshot + live updates, background history
+  backfill, plain-text send.
+- Not built: E2EE verification, registration, replies, reactions,
+  edits, search, read receipts, typing, media (only cache retention
+  policy exists), notifications, voice/video.
 
-**UI** (Flutter, `flutter_rust_bridge`):
-- Real dark theme matching the project's own Cinny-based design
-  reference (`design/`), not Material defaults.
-- Real 3-pane desktop layout: sidebar rail (spaces + nav) / room list /
-  room view — not a placeholder.
-- Home, Direct Messages, and a selected space all have real screens
-  behind them. Explore, Search, Inbox, and most of Settings are still
-  explicit "Not implemented yet" placeholders — intentional, not faked
-  data, but also not built.
-- Logout works.
+**UI** (Flutter + `flutter_rust_bridge`):
+- Custom dark theme, real 3-pane layout (rail / room list / room view),
+  Home, Direct Messages and space screens, member drawer, settings
+  (profile + logout).
+- Explore, Search, Inbox and most of Settings are explicit
+  "Not implemented yet" placeholders.
 
-**Platforms:**
-- Linux desktop: built and run-tested repeatedly.
-- Windows desktop: the Rust workspace is checked/tested on Windows in
-  CI (`cargo check`/`clippy`/`test`), but the actual Flutter Windows
-  **build has never been attempted**. Treat Windows as unverified until
-  someone actually runs `flutter build windows`.
+**Platforms:** Linux built and run-tested. Windows: Rust workspace
+checked in CI, Flutter Windows build **never run** — unverified.
 
-**Testing/CI:**
-- 3 Rust tests (mock homeserver, no real network) + 1 Flutter widget
-  test file.
-- `.github/workflows/ci.yml` runs `cargo fmt`/`check`/`clippy`/`test` on
-  Ubuntu+Windows, plus `cargo-deny`/`cargo-audit` — Rust-only, doesn't
-  build or test the Flutter app itself.
+**Testing/CI:** 3 Rust tests (mock homeserver) + 1 Flutter widget test
+file. CI runs `fmt`/`check`/`clippy`/`test`/`cargo-deny`/`cargo-audit`
+on Ubuntu + Windows; it doesn't build or test the Flutter app yet.
 
-**Suggested current build tag: `0.1.0-alpha`.** The defining deliverable
-of the 0.1.0 milestone below (real 3-column desktop UI, no blue
-defaults, wired to live data) is substantially met; the milestone's one
-remaining item (a real Windows build) is listed as an open task below
-rather than claimed as done.
+**Build tag:** `0.1.0-alpha`.
+
+### Fixed issues (history)
+
+- Bare domain in the homeserver field now works
+  (`server_name_or_homeserver_url`, `.well-known` discovery) — 2026-11-12.
+- History backfill moved to a cancellable background task instead of
+  blocking room-open — 2026-11-12.
+- Room switching hang: the 2026-11-11 fix (disposing the old
+  `RoomTimeline` in `_stopCurrentTimeline()`) was reverted 2026-11-12/13
+  — disposing a timeline whose live stream hadn't yet noticed
+  cancellation caused the same hang. The open/switch logic was later
+  extracted into `ActiveRoomController` (2026-11-15). The actual cause —
+  `_detach()` awaited the Dart-side stream cancellation *before* calling
+  `stopTimeline`, the only thing that can end those streams — was found
+  and fixed 2026-11-17 (call `stopTimeline` first). **Not yet confirmed
+  against a live click-through.**
+- Full history backfill via `paginate_backwards` (up to 10 × 50 events,
+  stops at room start) — 2026-11-11.
+- MSC3417 call rooms were hidden from a space's room list; filter
+  narrowed to exclude only `RoomType::Space` — 2026-11-11.
 
 ---
-
-## Known issues (not yet fixed)
-
-- ~~Login screen requires a full URL scheme.~~ **Fixed 2026-11-12.**
-  Typing just a bare domain (e.g. `matrix.org`) into the homeserver
-  field used to fail to find the server — only `https://matrix.org`
-  worked. `build_client` (`client.rs`) now calls
-  `ClientBuilder::server_name_or_homeserver_url` instead of
-  `.homeserver_url`, which accepts either a bare server name or a full
-  URL, assumes HTTPS, and does `.well-known/matrix/client` discovery
-  for the bare-name case. Verified against `voidfun.net` with
-  `MATRIX_HOMESERVER=voidfun.net` (no scheme) via `sync_smoke_test`.
-- ~~Switching rooms gets stuck after the first switch.~~ **Fixed
-  2026-11-11.** `_stopCurrentTimeline()` (`home_screen.dart`) now calls
-  `.dispose()` on the old `RoomTimeline` in addition to `stopTimeline()`
-  — covers all three call sites (`_openRoom`, `_selectSpace`,
-  `dispose()`) since they all route through it.
-- ~~Only the last message shows, not full room history.~~ **Fixed
-  2026-11-11, refined same day.** `timeline_for` (`timeline.rs`) calls
-  `Timeline::paginate_backwards` to backfill from the server instead of
-  only showing whatever was already in the local event cache. A single
-  batch of 20 raw events (first fix) wasn't enough — most of a batch is
-  often non-message events (state events, reactions) filtered out
-  before display, so real-world testing against `voidfun.net` still
-  showed far less history than other clients. Now loops up to 10 pages
-  of 50 events each, stopping early once `paginate_backwards` reports
-  hitting the start of the room.
-- ~~Switching rooms in a space looked stuck again (regression from the
-  history-backfill fix above).~~ **Fixed 2026-11-12.** The backfill
-  loop ran synchronously inside `timeline_for`, blocking room-open on
-  up to 10 sequential network round-trips — a real repro against
-  `voidfun.net` showed a 41-message room's backfill taking *minutes*.
-  Every room switch in the UI waited on this, which looked identical
-  to the original "switching rooms gets stuck" bug. `timeline_for` now
-  returns as soon as the `Timeline` is built; the backfill loop runs
-  detached in a spawned task against a shared `Arc<Timeline>`, racing
-  the same `CancellationToken` `RoomTimeline::stop` already cancels on
-  room switch — so backfill for a room nobody's looking at anymore
-  stops promptly instead of continuing to hammer the server.
-- ~~Rooms with a `room_type` (MSC3417 call/"voice chat" rooms, and a
-  room newly added to a space from another client) don't show up in a
-  space's room list, even after refresh.~~ **Fixed 2026-11-11.**
-  `space_rooms` (`space.rs`) filtered out every room with any
-  `room_type` set (`room.room_type.is_none()`) — meant to exclude only
-  nested subspaces (`room_type: Some(Space)`), but excluded MSC3417
-  call rooms too, since those also carry a `room_type`
-  (`Some(Call)`). Found 2026-11-11 testing against `voidfun.net`: a
-  voice-chat room was invisible in its space's room list no matter how
-  many times "refresh" was pressed. Narrowed the filter to exclude only
-  `Some(RoomType::Space)`.
 
 ## 0.0.1-alpha — done
 
 - [x] Log in to a Matrix homeserver (username/password).
-- [x] Start sync, confirm it actually runs against a real server.
+- [x] Start sync, confirm it runs against a real server.
 - [x] Send a plain-text message and read it back.
 
-## 0.1.0-alpha — UI shell (in progress)
+## 0.1.0-alpha — UI shell (finishing) `base`
 
-**Goal:** a real, fully custom-styled desktop interface, not a
-backend-logic demo.
+**Goal:** a real, fully custom-styled desktop interface wired to live
+data.
 
-- [x] 3-pane desktop layout (sidebar rail / room list / room view).
-- [x] Custom dark theme, no Material blue defaults.
-- [x] Real joined-room and joined-space navigation, live-updating.
-- [x] Member list drawer for an open room.
-- [x] Settings dialog: at minimum profile display (avatar, display
-  name, user ID) alongside the existing logout button.
-- [x] Direct Messages tab: list of real DM rooms (1:1 rooms, not
-  flagged as spaces).
-  **Acceptance:** a DM started from another client shows up in this
-  tab with the other user's name. Implemented and unit-tested against
-  `Room::is_dm()` (the `m.direct` account-data flag, not just a
-  2-member heuristic); the live account used to runtime-check this had
-  no DM-flagged rooms at verification time, so the tab's empty state
-  was confirmed but the "other user's name" part of this acceptance
-  criterion still wants a real click-through once a DM exists.
-- [ ] Windows desktop build actually attempted and confirmed working.
-  **Acceptance:** `flutter build windows` succeeds and the built `.exe`
-  launches, logs in, and sends a message on a real Windows machine (or
-  CI runner). A `flutter-windows-build` job now exists in
-  `.github/workflows/ci.yml` (Windows runner, `flutter build windows`
-  via Cargokit) — added 2026-11-09, not yet actually run (this working
-  copy isn't a git repo here, so it can't push to trigger Actions).
-  Still open until a CI run or a real machine confirms the build
-  succeeds and the `.exe` launches.
+- [x] 3-pane layout, custom dark theme, live room/space navigation.
+- [x] Member list drawer.
+- [x] Settings dialog (avatar, display name, user ID, logout).
+- [x] Direct Messages tab (`Room::is_dm()`).
+  *Remaining check:* a DM started from another client shows up with the
+  other user's name (no DM-flagged room existed at verification time).
+- [ ] Windows desktop build actually works.
+  **Acceptance:** `flutter build windows` succeeds, the `.exe`
+  launches, logs in and sends a message (CI runner or real machine).
+  The `flutter-windows-build` job exists in `ci.yml` but has never run.
+- [ ] Flutter app is built and widget-tested in CI on Linux + Windows.
+  **Acceptance:** a CI run is green with `flutter analyze`,
+  `flutter test` and a desktop build on both OSes.
 
-## 0.2.0-alpha — real chat features
+## 0.2.0-alpha — encryption & session security `security`
 
-**Goal:** a timeline that behaves like a real chat client, not just a
-scrollback of plain-text lines.
+**Goal:** encrypted rooms work like in any mainstream client, and
+credentials aren't lying around in plaintext.
+
+- [ ] Send and receive in an encrypted room.
+  **Acceptance:** in a room created in Element with encryption on,
+  messages sent from both sides decrypt correctly; no "unable to
+  decrypt" for messages sent after login.
+- [ ] Show encryption state in the UI.
+  **Acceptance:** encrypted rooms show an indicator; undecryptable
+  events show a clear placeholder instead of an empty or broken row.
+- [ ] Device verification (SAS emoji) — incoming and outgoing.
+  **Acceptance:** verifying this session against Element works in both
+  directions and both sides show it as verified.
+- [ ] Cross-signing and secret storage: bootstrap on a fresh account,
+  recovery-key entry on an existing one.
+  **Acceptance:** a new login on an account with encrypted history +
+  recovery key makes old messages readable (key backup restored).
+- [ ] Encrypted local store, secrets in the OS keyring.
+  **Acceptance:** no access token or store passphrase in plaintext
+  anywhere on disk (checked with a grep over the app's data dir) on
+  Linux and Windows.
+- [ ] Session list and remote sign-out.
+  **Acceptance:** other sessions of the account are listed; signing one
+  out in this app logs it out in the other client.
+
+## 0.3.0-alpha — accounts & onboarding `base`
+
+**Goal:** someone other than the author can sign up, log in, get
+invited and join rooms.
+
+- [ ] Registration from the app (UIAA flow; registration token, plus
+  captcha/email if the server demands them).
+  **Acceptance:** a brand-new account is created on a test homeserver
+  from the app alone and lands in a working session. If a target
+  server only offers OAuth/OIDC (MAS), the criterion is the browser
+  hand-off flow instead.
+- [ ] Optional: OAuth/OIDC or SSO login.
+  **Acceptance:** login against a server that disables password login
+  works via the system browser.
+- [ ] Pending invites: list, accept, decline.
+  **Acceptance:** an invite sent from another client appears, and
+  accepting it opens the room.
+- [ ] Join a room by alias, room ID or `matrix.to` link; leave a room.
+  **Acceptance:** both work and the room list updates live.
+- [ ] Account settings: change display name/avatar, change password.
+  **Acceptance:** changes are visible in another client.
+- [ ] Login/registration error handling: wrong password, unreachable
+  server, bad server name, rate limit — each with a readable message.
+
+## 0.4.0-alpha — core chat features `chat`
+
+**Goal:** the timeline behaves like a real chat client.
 
 - [ ] Reply to a message.
-  **Acceptance:** sending a reply shows the quoted original inline, and
-  round-trips correctly when read by another client (e.g. Element).
-- [ ] React to a message with an emoji.
-  **Acceptance:** reactions appear under the message, aggregate
-  correctly across users, and are visible in another client.
-- [ ] Edit a sent message.
-  **Acceptance:** an edited message shows "(edited)", and the edit
-  history is at least retrievable (doesn't need a full UI for history
-  yet).
-- [ ] Search within the current room's timeline.
-  **Acceptance:** typing a query highlights/jumps to matching messages
-  already loaded in the open timeline (server-side search across all
-  rooms can wait for a later pass).
+  **Acceptance:** shows the quoted original inline and round-trips
+  correctly in Element.
+- [ ] React with an emoji.
+  **Acceptance:** reactions aggregate under the message and are visible
+  in another client.
+- [ ] Edit and delete (redact) own messages.
+  **Acceptance:** edited message shows "(edited)"; deleted one
+  disappears or shows "deleted" in both clients.
+- [ ] Markdown input and safe HTML rendering (bold, code, quotes,
+  links).
+  **Acceptance:** formatted messages render the same in this app and in
+  Element; no unsanitized HTML reaches the widget tree.
+- [ ] Infinite scroll back in history.
+  **Acceptance:** scrolling to the top loads older events without
+  blocking the UI; no duplicates or gaps.
+- [ ] Send queue with retry.
+  **Acceptance:** a message sent while offline shows a failed/pending
+  state and is delivered (or can be retried) once the network is back.
+- [ ] Search within the open timeline.
+  **Acceptance:** a query highlights/jumps to matches in loaded
+  messages. (Server-side search doesn't work in encrypted rooms —
+  see Backlog.)
 
-## 0.3.0-alpha — spaces and roles
+## 0.5.0-alpha — awareness & notifications `chat`
 
-**Goal:** spaces and rooms become manageable, not just browsable.
+**Goal:** you can tell what's new without opening every room.
+
+- [ ] Read receipts and a fully-read marker.
+  **Acceptance:** reading a room in this app marks it read in Element
+  and vice versa.
+- [ ] Unread counters and highlight/mention badges on rooms and spaces.
+  **Acceptance:** counters match Element's for the same account.
+- [ ] Typing indicators (show and send).
+- [ ] Desktop notifications while the app is running, with per-room
+  mute settings.
+  **Acceptance:** a message in an unmuted, unfocused room raises an OS
+  notification on Linux and Windows; muted rooms stay silent.
+- [ ] System tray icon with unread state; app can run minimized.
+
+## 0.6.0-beta — rooms & spaces management `spaces`
+
+**Goal:** rooms and spaces are manageable, not just browsable.
 
 - [x] List top-level joined spaces and a space's child rooms.
-- [ ] Show a room member's role (admin/moderator/member) based on power
-  levels.
-  **Acceptance:** the member drawer shows a role label per member,
-  matching the room's actual `m.room.power_levels` state.
-- [ ] Gate admin-only actions (kick, ban, room settings edit) by the
-  current user's own power level.
-  **Acceptance:** a non-privileged user doesn't see/can't trigger
-  actions they lack permission for; a privileged user can.
-- [ ] Create a room or space from the UI.
-  **Acceptance:** a room/space created in-app is immediately visible to
-  another client joined to the same account.
+- [ ] Live updates for a space's child rooms (currently snapshot only).
+  **Acceptance:** a room added to a space from another client appears
+  without pressing refresh.
+- [ ] Member roles from `m.room.power_levels`.
+  **Acceptance:** the member drawer shows admin/moderator/member
+  matching the room's real power levels.
+- [ ] Gate admin actions (kick, ban, invite, room settings) by the
+  current user's power level.
+  **Acceptance:** a non-privileged user can't see or trigger what they
+  lack permission for; a privileged user can.
+- [ ] Create a room or space; edit name, topic, avatar.
+  **Acceptance:** results are immediately visible in another client.
+- [ ] Invite users to a room.
+- [ ] Explore: public room directory with search and join.
+  **Acceptance:** the placeholder is replaced by a working directory
+  of the homeserver.
+- [ ] Nested subspaces.
 
-## 0.5.0-beta — media
+## 0.7.0-beta — media `media`
 
-**Goal:** images and files actually work, not just text.
+**Goal:** images and files actually work, including in encrypted rooms.
 
-- [ ] Download and display images inline in the timeline.
-  **Acceptance:** an image sent from another client renders inline,
-  using `matrix-storage`'s cache (not re-downloaded on every scroll).
-- [ ] Send an image/file from the UI.
-  **Acceptance:** a file sent from this app opens correctly in another
-  client.
+- [ ] Download and display images inline, via `matrix-storage` cache.
+  **Acceptance:** an image from another client renders inline, in both
+  plain and encrypted rooms, and isn't re-downloaded on every scroll.
+- [ ] Avatars (users, rooms, spaces) from the media repository.
+- [ ] Send image/file (picker, drag-and-drop, clipboard paste) with
+  upload progress.
+  **Acceptance:** a file sent from here opens correctly in Element,
+  encrypted rooms included.
+- [ ] Open/save received files; basic video and audio playback.
 - [ ] Media gallery view for a room.
-  **Acceptance:** opening a room's gallery shows all its images in a
-  grid, loaded from cache where available.
+  **Acceptance:** all room images in a grid, loaded from cache where
+  available.
+- [ ] Media cache retention policy actually enforced.
+  **Acceptance:** cache stays under the configured limit.
 
-## 0.7.0-beta — voice
+## 0.8.0-beta — voice (and video if feasible) `calls`
 
-**Goal:** basic voice calls work without being unusable.
+**Goal:** calls work well enough to be usable.
 
-- [ ] 1:1 voice call via WebRTC (matrix-sdk's call support).
-  **Acceptance:** a call connects, audio is heard both directions, and
-  normal network conditions don't produce noticeable lag/dropouts.
+Technical note: the current Matrix calling standard is MatrixRTC
+(MSC4143) with a LiveKit SFU, as used by Element Call — not legacy 1:1
+WebRTC signalling. The implementation route (embed Element Call via the
+SDK widget driver vs. native LiveKit client in Flutter) must be decided
+and spiked **before** this milestone starts. The decision and its
+rationale go into `docs/ARCHITECTURE.md`.
 
-## 0.9.0-rc — stabilization
+- [ ] Spike: choose the call architecture and prove a 2-party call.
+- [ ] 1:1 voice call.
+  **Acceptance:** call connects against the project's own homeserver
+  stack, audio works both ways, and normal network conditions don't
+  produce noticeable lag/dropouts. Interop with Element Call is
+  verified.
+- [ ] Incoming call notification and answer/decline.
+- [ ] Group voice in a call room (MSC3417 rooms are already listed).
+- [ ] Optional: video and screen sharing.
+
+## 0.9.0-rc — stabilization & distribution `quality`
 
 **Goal:** confidence to call it done, on both real target platforms.
 
-- [ ] Full manual click-through test pass on both Linux and Windows.
-  **Acceptance:** a written test log covering login, sync, rooms,
-  spaces, timeline, send, media, reactions/replies/edits, voice — on
-  both OSes, no crashes.
-- [ ] All known critical bugs from the above pass fixed.
-- [ ] CI builds and smoke-tests the actual Flutter app (not just the
-  Rust workspace) on both platforms.
+- [ ] Full manual click-through pass on Linux and Windows.
+  **Acceptance:** a written test log covering login, registration,
+  E2EE + verification, rooms, spaces, timeline, send, media,
+  reactions/replies/edits, notifications, voice — both OSes, no crashes.
+- [ ] All critical bugs from that pass fixed.
+- [ ] CI smoke-tests the Flutter app on both platforms (extends the
+  0.1.0 CI job).
+- [ ] Packaging: Linux (AppImage/Flatpak or Nix package) and a Windows
+  installer or portable zip.
+  **Acceptance:** a clean machine without a dev toolchain installs and
+  runs it.
+- [ ] Security pass against `docs/SECURITY.md`: dependency audit,
+  secrets handling, log scrubbing (no tokens/keys/message bodies in
+  logs or crash reports).
+- [ ] Update path: documented way to upgrade (auto-update or manual).
+- [ ] Basic accessibility and keyboard navigation (tab order, shortcuts
+  for room switching and send).
 
-## 1.0.0 — release
+## 1.0.0 — release `quality`
 
-- [ ] UX polish pass against the `design/` reference, no known rough
-  edges in the core flows.
-- [ ] User-facing documentation (how to install, log in, basic usage).
-- [ ] Android client: **not in this repository.** Tracked as a future,
-  separate project with its own roadmap once this one reaches 1.0.
+- [ ] UX polish pass against the `design/` reference, no rough edges
+  in core flows.
+- [ ] Localization: at least English and Russian.
+- [ ] User documentation (install, log in/register, verify a device,
+  basic usage).
+- [ ] Android client: **not in this repository.** Future, separate
+  project with its own roadmap once this one reaches 1.0.
+
+## Release criteria for 1.0
+
+1.0.0 does not mean "all of Matrix is implemented". It means the core
+scenarios are reliable, secure and predictable. All of the following
+must hold:
+
+- Login, registration, E2EE with device verification and key recovery,
+  text chat (reply/react/edit/delete), media and 1:1 voice calls work
+  on **both** Linux and Windows, per the written test log from 0.9.0.
+- No known crash, data-loss or credential-leak bug in the core flows.
+- No secrets (tokens, keys, message bodies) in plaintext on disk or in
+  logs.
+- CI builds and smoke-tests the Flutter app on both platforms; a clean
+  machine can install and run the released build.
+- Anything in the UI that isn't implemented is either hidden or
+  clearly marked — no fake data.
+- Known limitations are listed in the user documentation.
+
+## Out of scope
+
+- Android, iOS and macOS clients (a phone client is a separate
+  repository).
+- A web version.
+- Bridges, bots and a plugin system.
+- Implementing a homeserver or custom protocol extensions.
+
+## Backlog (post-1.0 / unscheduled)
+
+- Threads.
+- Server-side search; local search index for encrypted rooms (server
+  search can't see encrypted content).
+- Multi-account.
+- Polls, location sharing, pinned messages, stickers/custom emoji.
+- URL previews.
+- Moderation tools: report content, ignore user, bulk redact.
+- Room upgrades, knock/restricted join rules.
+- Push on desktop beyond "app is running" (background service).

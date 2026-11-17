@@ -46,15 +46,19 @@ this one.
 
 ## Building
 
-Nix is the supported way to get a working toolchain; see `flake.nix`.
+Nix is the supported way to get a working toolchain; see
+`nix/flake.nix`. The flake lives in `nix/` rather than the repo root so
+that evaluating it doesn't copy `target/` and `flutter/build` into the
+Nix store — that copy was ~30GiB and filled the disk every session; the
+full rationale is in the comment at the top of `nix/flake.nix`.
 
 ```sh
 # Rust-only work (cargo check/test on the matrix-client crate etc.)
-nix develop
+nix develop ./nix
 
 # Building/running the Flutter desktop app (pulls in GTK/Flutter —
-# a much heavier shell, kept separate on purpose, see flake.nix)
-nix develop .#flutter
+# a much heavier shell, kept separate on purpose, see nix/flake.nix)
+nix develop ./nix#flutter
 cd flutter
 flutter build linux   # or: flutter run -d linux
 ```

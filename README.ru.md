@@ -48,16 +48,20 @@ macOS — телефонный клиент планируется отдель�
 
 ## Сборка
 
-Поддерживаемый способ получить рабочее окружение — Nix, см. `flake.nix`.
+Поддерживаемый способ получить рабочее окружение — Nix, см.
+`nix/flake.nix`. Flake лежит в `nix/`, а не в корне репозитория, чтобы
+его вычисление не копировало `target/` и `flutter/build` в Nix store —
+такая копия занимала ~30 ГиБ и забивала диск каждую сессию; подробное
+обоснование — в комментарии в начале `nix/flake.nix`.
 
 ```sh
 # Работа только с Rust (cargo check/test и т.п. на matrix-client)
-nix develop
+nix develop ./nix
 
 # Сборка/запуск Flutter-приложения под десктоп (тянет GTK/Flutter —
 # заметно более тяжёлое окружение, вынесено отдельно специально,
-# см. flake.nix)
-nix develop .#flutter
+# см. nix/flake.nix)
+nix develop ./nix#flutter
 cd flutter
 flutter build linux   # или: flutter run -d linux
 ```

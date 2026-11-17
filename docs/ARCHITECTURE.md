@@ -144,8 +144,24 @@ disk yet (logs in fresh each launch).
   meant the *next* `nix develop` — even just for a plain `cargo` command —
   re-pulled this entire chain from the binary cache before anything else
   could run, causing two separate full-disk incidents in one session
-  (2026-11-06). Use `nix develop .#flutter` for Flutter work, plain `nix
-  develop` for everything else.
+  (2026-11-06). Use `nix develop ./nix#flutter` for Flutter work, plain
+  `nix develop ./nix` for everything else.
+- **The flake lives in `nix/`, not the repo root — don't move it back.**
+  Evaluating a `path:` flake copies its entire directory into the Nix
+  store, and this working tree isn't a git checkout (the git-tracked
+  copy is a separate staging directory), so Nix had no `.gitignore` to
+  filter by and copied `target/` (~9.6GiB) and `flutter/build` (~11GiB)
+  along with everything else — a 30GiB `…-source` store path, measured
+  2026-11-15. It was also self-perpetuating: `flutter build linux`
+  writes into `flutter/build`, changing the path-input's content hash,
+  so the *next* `nix develop` copied another ~30GiB, filled the disk,
+  forced a GC, and the GC evicted the shell closure that the session
+  after that then refetched. This — not the `sysprof` closure alone —
+  is the main engine behind the recurring full-disk incidents
+  (suspected in `reports/2026-11-08-live-timeline-stream.md`, confirmed
+  and fixed 2026-11-15). Both devShells are plain `mkShell`s that never
+  reference `self` or any project source, so the sources were never
+  needed in the store at all; from `nix/` the copy is a few KiB.
 - **Don't run `nix-collect-garbage` preemptively.** Nix doesn't delete
   anything on its own — store paths only vanish when GC actually runs.
   Running it "just in case" between commands guarantees the *next* `nix

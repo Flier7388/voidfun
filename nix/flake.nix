@@ -1,6 +1,27 @@
 {
   description = "Matrix client — Rust backend (matrix-rust-sdk) + Flutter UI";
 
+  # Lives in `nix/`, not the repo root, and deliberately so (moved
+  # 2026-11-15) — this is the actual root cause of the recurring
+  # out-of-disk incidents, not just tidying. Evaluating a `path:` flake
+  # copies its whole directory into the Nix store, and the working tree
+  # is not a git checkout (the git-tracked copy is a separate staging
+  # directory), so Nix had no `.gitignore` to filter by and copied
+  # *everything* — including `target/` (~9.6GiB) and `flutter/build`
+  # (~11GiB). A 30GiB `…-source` store path was measured on 2026-11-15.
+  # Worse, it was self-perpetuating: `flutter build linux` writes into
+  # `flutter/build`, which changes the path-input's content hash, so the
+  # *next* `nix develop` copied another ~30GiB — filling the disk, and
+  # then a GC evicted the shell closure and the next session refetched
+  # it (the thrash loop first suspected in
+  # `reports/2026-11-08-live-timeline-stream.md`). Both devShells below
+  # are plain `mkShell`s that never reference `self` or any project
+  # source, so nothing here needs the sources in the store at all;
+  # keeping the flake in its own directory drops the copy from ~30GiB to
+  # a few KiB. Enter with `nix develop ./nix` / `./nix#flutter` from the
+  # repo root (`../nix#flutter` from `flutter/`). Don't move this back
+  # to the root without re-reading this comment.
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";

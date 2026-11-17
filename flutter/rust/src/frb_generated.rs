@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 82473056;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -513386813;
 
 // Section: executor
 
@@ -98,6 +98,73 @@ fn wire__crate__api__matrix__account_display_name_impl(
                         let api_client_guard = api_client_guard.unwrap();
                         let output_ok =
                             crate::api::matrix::account_display_name(&*api_client_guard).await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__matrix__back_pagination_status_stream_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "back_pagination_status_stream",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_timeline = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RoomTimeline>,
+            >>::sse_decode(&mut deserializer);
+            let api_sink = <StreamSink<
+                crate::api::matrix::BackPaginationStatus,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let mut api_timeline_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_timeline,
+                                    0,
+                                    false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => {
+                                    api_timeline_guard =
+                                        Some(api_timeline.lockable_decode_async_ref().await)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_timeline_guard = api_timeline_guard.unwrap();
+                        let output_ok = Ok::<_, ()>({
+                            crate::api::matrix::back_pagination_status_stream(
+                                &*api_timeline_guard,
+                                api_sink,
+                            )
+                            .await;
+                        })?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
@@ -349,6 +416,68 @@ fn wire__crate__api__matrix__login_impl(
                             api_username,
                             api_password,
                             api_store_path,
+                        )
+                        .await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__matrix__paginate_backwards_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "paginate_backwards",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_timeline = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RoomTimeline>,
+            >>::sse_decode(&mut deserializer);
+            let api_num_events = <u16>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let mut api_timeline_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_timeline,
+                                    0,
+                                    false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => {
+                                    api_timeline_guard =
+                                        Some(api_timeline.lockable_decode_async_ref().await)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_timeline_guard = api_timeline_guard.unwrap();
+                        let output_ok = crate::api::matrix::paginate_backwards(
+                            &*api_timeline_guard,
+                            api_num_events,
                         )
                         .await?;
                         std::result::Result::Ok(output_ok)
@@ -1237,6 +1366,19 @@ impl SseDecode
 
 impl SseDecode
     for StreamSink<
+        crate::api::matrix::BackPaginationStatus,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
+impl SseDecode
+    for StreamSink<
         Vec<crate::api::matrix::RoomSummary>,
         flutter_rust_bridge::for_generated::SseCodec,
     >
@@ -1279,6 +1421,18 @@ impl SseDecode for String {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <Vec<u8>>::sse_decode(deserializer);
         return String::from_utf8(inner).unwrap();
+    }
+}
+
+impl SseDecode for crate::api::matrix::BackPaginationStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_isPaginating = <bool>::sse_decode(deserializer);
+        let mut var_hitTimelineStart = <bool>::sse_decode(deserializer);
+        return crate::api::matrix::BackPaginationStatus {
+            is_paginating: var_isPaginating,
+            hit_timeline_start: var_hitTimelineStart,
+        };
     }
 }
 
@@ -1445,6 +1599,13 @@ impl SseDecode for crate::api::matrix::TimelineMessage {
     }
 }
 
+impl SseDecode for u16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u16::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for u64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1488,25 +1649,32 @@ fn pde_ffi_dispatcher_primary_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__matrix__account_display_name_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__matrix__client_session_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__matrix__direct_rooms_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__matrix__direct_rooms_stream_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__matrix__init_app_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__matrix__login_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__matrix__restore_session_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__matrix__room_members_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__matrix__rooms_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__matrix__rooms_stream_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__matrix__send_text_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__matrix__space_rooms_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__matrix__spaces_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__matrix__spaces_stream_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__matrix__start_sync_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__matrix__stop_sync_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__matrix__stop_timeline_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__matrix__timeline_for_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__matrix__timeline_messages_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__matrix__timeline_messages_stream_impl(
+        2 => wire__crate__api__matrix__back_pagination_status_stream_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        3 => wire__crate__api__matrix__client_session_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__matrix__direct_rooms_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__matrix__direct_rooms_stream_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__matrix__init_app_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__matrix__login_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__matrix__paginate_backwards_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__matrix__restore_session_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__matrix__room_members_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__matrix__rooms_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__matrix__rooms_stream_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__matrix__send_text_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__matrix__space_rooms_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__matrix__spaces_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__matrix__spaces_stream_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__matrix__start_sync_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__matrix__stop_sync_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__matrix__stop_timeline_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__matrix__timeline_for_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__matrix__timeline_messages_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__matrix__timeline_messages_stream_impl(
             port,
             ptr,
             rust_vec_len,
@@ -1560,6 +1728,27 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<RoomTimeline>> for RoomTimelin
     }
 }
 
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::matrix::BackPaginationStatus {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.is_paginating.into_into_dart().into_dart(),
+            self.hit_timeline_start.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::matrix::BackPaginationStatus
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::matrix::BackPaginationStatus>
+    for crate::api::matrix::BackPaginationStatus
+{
+    fn into_into_dart(self) -> crate::api::matrix::BackPaginationStatus {
+        self
+    }
+}
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::matrix::RoomMemberSummary {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -1713,6 +1902,18 @@ impl SseEncode
 
 impl SseEncode
     for StreamSink<
+        crate::api::matrix::BackPaginationStatus,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
+    for StreamSink<
         Vec<crate::api::matrix::RoomSummary>,
         flutter_rust_bridge::for_generated::SseCodec,
     >
@@ -1751,6 +1952,14 @@ impl SseEncode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<u8>>::sse_encode(self.into_bytes(), serializer);
+    }
+}
+
+impl SseEncode for crate::api::matrix::BackPaginationStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_paginating, serializer);
+        <bool>::sse_encode(self.hit_timeline_start, serializer);
     }
 }
 
@@ -1873,6 +2082,13 @@ impl SseEncode for crate::api::matrix::TimelineMessage {
         <String>::sse_encode(self.sender, serializer);
         <String>::sse_encode(self.body, serializer);
         <u64>::sse_encode(self.timestamp_ms, serializer);
+    }
+}
+
+impl SseEncode for u16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u16::<NativeEndian>(self).unwrap();
     }
 }
 

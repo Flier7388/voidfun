@@ -16,6 +16,7 @@ class RoomView extends StatelessWidget {
     required this.messageController,
     required this.onSend,
     required this.busy,
+    required this.loadingHistory,
     required this.membersOpen,
     required this.onToggleMembers,
   });
@@ -25,6 +26,10 @@ class RoomView extends StatelessWidget {
   final TextEditingController messageController;
   final VoidCallback onSend;
   final bool busy;
+  // Backfill runs in the background after the room is already showing
+  // (see `ActiveRoomController._backfill`) — this is purely informational,
+  // never a precondition for the room to be usable, unlike `busy`.
+  final bool loadingHistory;
   final bool membersOpen;
   final VoidCallback onToggleMembers;
 
@@ -55,6 +60,19 @@ class RoomView extends StatelessWidget {
               onToggleMembers: onToggleMembers,
             ),
             const Divider(height: 1, color: MatrixColors.bgContainerLine),
+            // A slim bar, not a full-screen spinner: this reflects
+            // background history backfill, not room-open — the room
+            // underneath is already interactive while it shows.
+            SizedBox(
+              height: 2,
+              child: loadingHistory
+                  ? const LinearProgressIndicator(
+                      minHeight: 2,
+                      color: MatrixColors.primaryMain,
+                      backgroundColor: Colors.transparent,
+                    )
+                  : null,
+            ),
             Expanded(child: _Timeline(messages: messages)),
             _Composer(
               controller: messageController,

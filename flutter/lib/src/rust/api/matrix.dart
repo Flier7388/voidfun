@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
 
 /// Logs in with a username and password against `homeserver_url`.
 /// `store_path` is a directory the app controls (e.g. from
@@ -131,6 +131,31 @@ Stream<List<TimelineMessage>> timelineMessagesStream({
   timeline: timeline,
 );
 
+/// Adds up to `num_events` older events to the start of this room's
+/// timeline. Returns whether this reached the start of the room's
+/// history. Safe to call while another call on the same `timeline` is
+/// still in flight — see `matrix_client::RoomTimeline::
+/// paginate_backwards`'s doc comment for why.
+Future<bool> paginateBackwards({
+  required RoomTimeline timeline,
+  required int numEvents,
+}) => RustLib.instance.api.crateApiMatrixPaginateBackwards(
+  timeline: timeline,
+  numEvents: numEvents,
+);
+
+/// Streams this room's backward-pagination state: pushes the current
+/// value immediately, then a fresh one on every change, until the Dart
+/// side cancels its subscription. Same push pattern as
+/// [`timeline_messages_stream`]; produces nothing at all for a timeline
+/// not in live mode (never the case for anything [`timeline_for`] hands
+/// out).
+Stream<BackPaginationStatus> backPaginationStatusStream({
+  required RoomTimeline timeline,
+}) => RustLib.instance.api.crateApiMatrixBackPaginationStatusStream(
+  timeline: timeline,
+);
+
 /// Sends a plain-text message to this room's timeline.
 Future<void> sendText({required RoomTimeline timeline, required String body}) =>
     RustLib.instance.api.crateApiMatrixSendText(timeline: timeline, body: body);
@@ -140,6 +165,32 @@ abstract class MatrixClient implements RustOpaqueInterface {}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RoomTimeline>>
 abstract class RoomTimeline implements RustOpaqueInterface {}
+
+/// A live timeline's backward-pagination state. Mirrors
+/// `matrix_client::BackPaginationStatus`.
+class BackPaginationStatus {
+  /// `true` while a backward-pagination request is in flight.
+  final bool isPaginating;
+
+  /// `true` once the room's full history has been reached.
+  final bool hitTimelineStart;
+
+  const BackPaginationStatus({
+    required this.isPaginating,
+    required this.hitTimelineStart,
+  });
+
+  @override
+  int get hashCode => isPaginating.hashCode ^ hitTimelineStart.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BackPaginationStatus &&
+          runtimeType == other.runtimeType &&
+          isPaginating == other.isPaginating &&
+          hitTimelineStart == other.hitTimelineStart;
+}
 
 /// A joined room member's identity. Mirrors `matrix_client::RoomMemberSummary`.
 class RoomMemberSummary {

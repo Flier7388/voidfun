@@ -66,6 +66,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<BackPaginationStatus>
+  dco_decode_StreamSink_back_pagination_status_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<List<RoomSummary>> dco_decode_StreamSink_list_room_summary_Sse(
     dynamic raw,
   );
@@ -80,6 +84,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String dco_decode_String(dynamic raw);
+
+  @protected
+  BackPaginationStatus dco_decode_back_pagination_status(dynamic raw);
 
   @protected
   bool dco_decode_bool(dynamic raw);
@@ -122,6 +129,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TimelineMessage dco_decode_timeline_message(dynamic raw);
+
+  @protected
+  int dco_decode_u_16(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -172,6 +185,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<BackPaginationStatus>
+  sse_decode_StreamSink_back_pagination_status_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<List<RoomSummary>> sse_decode_StreamSink_list_room_summary_Sse(
     SseDeserializer deserializer,
   );
@@ -186,6 +205,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
+
+  @protected
+  BackPaginationStatus sse_decode_back_pagination_status(
+    SseDeserializer deserializer,
+  );
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
@@ -236,6 +260,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TimelineMessage sse_decode_timeline_message(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -298,6 +328,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_back_pagination_status_Sse(
+    RustStreamSink<BackPaginationStatus> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_list_room_summary_Sse(
     RustStreamSink<List<RoomSummary>> self,
     SseSerializer serializer,
@@ -317,6 +353,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_back_pagination_status(
+    BackPaginationStatus self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
@@ -383,6 +425,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     TimelineMessage self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);

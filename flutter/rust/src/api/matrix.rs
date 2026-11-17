@@ -126,6 +126,24 @@ impl From<matrix_client::SpaceSummary> for SpaceSummary {
     }
 }
 
+/// A live timeline's backward-pagination state. Mirrors
+/// `matrix_client::BackPaginationStatus`.
+pub struct BackPaginationStatus {
+    /// `true` while a backward-pagination request is in flight.
+    pub is_paginating: bool,
+    /// `true` once the room's full history has been reached.
+    pub hit_timeline_start: bool,
+}
+
+impl From<matrix_client::BackPaginationStatus> for BackPaginationStatus {
+    fn from(status: matrix_client::BackPaginationStatus) -> Self {
+        Self {
+            is_paginating: status.is_paginating,
+            hit_timeline_start: status.hit_timeline_start,
+        }
+    }
+}
+
 /// A single plain-text timeline message. Mirrors
 /// `matrix_client::TimelineMessage`.
 pub struct TimelineMessage {
@@ -380,6 +398,44 @@ pub async fn timeline_messages_stream(timeline: &RoomTimeline, sink: StreamSink<
             .add(snapshot.into_iter().map(Into::into).collect())
             .is_err()
         {
+            return;
+        }
+    }
+}
+
+/// Adds up to `num_events` older events to the start of this room's
+/// timeline. Returns whether this reached the start of the room's
+/// history. Safe to call while another call on the same `timeline` is
+/// still in flight — see `matrix_client::RoomTimeline::
+/// paginate_backwards`'s doc comment for why.
+#[flutter_rust_bridge::frb]
+pub async fn paginate_backwards(timeline: &RoomTimeline, num_events: u16) -> Result<bool, String> {
+    timeline
+        .paginate_backwards(num_events)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Streams this room's backward-pagination state: pushes the current
+/// value immediately, then a fresh one on every change, until the Dart
+/// side cancels its subscription. Same push pattern as
+/// [`timeline_messages_stream`]; produces nothing at all for a timeline
+/// not in live mode (never the case for anything [`timeline_for`] hands
+/// out).
+#[flutter_rust_bridge::frb]
+pub async fn back_pagination_status_stream(
+    timeline: &RoomTimeline,
+    sink: StreamSink<BackPaginationStatus>,
+) {
+    let Some((initial, statuses)) = timeline.subscribe_back_pagination_status().await else {
+        return;
+    };
+    futures_util::pin_mut!(statuses);
+    if sink.add(initial.into()).is_err() {
+        return;
+    }
+    while let Some(status) = statuses.next().await {
+        if sink.add(status.into()).is_err() {
             return;
         }
     }

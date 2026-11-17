@@ -29,4 +29,4 @@ pub use member::RoomMemberSummary;
 pub use room::RoomSummary;
 pub use session::Session;
 pub use space::SpaceSummary;
-pub use timeline::{RoomTimeline, TimelineMessage};
+pub use timeline::{BackPaginationStatus, RoomTimeline, TimelineMessage};

@@ -1,7 +1,5 @@
 //! Per-room timeline: reading recent messages and sending new ones.
 
-use std::sync::Arc;
-
 use async_stream::stream;
 use futures_util::{Stream, StreamExt};
 use matrix_sdk::ruma::RoomId;
@@ -58,40 +56,37 @@ fn utd_reason(cause: &UtdCause) -> &'static str {
     }
 }
 
-/// How many raw timeline events to request per backfill page when a
-/// timeline is first opened. See [`MAX_BACKFILL_PAGES`].
-const BACKFILL_PAGE_SIZE: u16 = 50;
-
-/// How many backfill pages to request on open before giving up — bounds
-/// the request count for a room with a very long history rather than
-/// paginating all the way back on every open.
-const MAX_BACKFILL_PAGES: usize = 10;
-
 /// A handle to one room's timeline: read recent messages, send new ones.
 pub struct RoomTimeline {
-    timeline: Arc<Timeline>,
+    timeline: Timeline,
     /// Lets [`RoomTimeline::stop`] interrupt a live
-    /// [`RoomTimeline::subscribe_messages`] loop, *and* the background
-    /// backfill task spawned in [`MatrixClient::timeline_for`] — both
-    /// race against this same token so neither outlives the room being
-    /// switched away from. See [`RoomTimeline::subscribe_messages`]'s doc
+    /// [`RoomTimeline::subscribe_messages`] loop. See that method's doc
     /// comment for why this exists — without it, switching away from a
     /// quiet room leaks the `Timeline` and its background sync task.
+    /// Also used by [`RoomTimeline::subscribe_back_pagination_status`],
+    /// for the same reason.
     cancel: CancellationToken,
 }
 
 impl MatrixClient {
     /// Builds a timeline handle for the given room ID.
     ///
-    /// Returns as soon as the timeline is built from whatever's already
-    /// in the local event cache — backfilling further history from the
-    /// server (see below) happens in a spawned background task instead
-    /// of blocking this call, so opening/switching rooms stays instant
-    /// even on a room with a lot of history. A single `paginate_backwards`
-    /// round-trip against a real server was found to take long enough
-    /// (real repro: a 41-message room took minutes to backfill over
-    /// several sequential pages) that doing this before returning made
-    /// every room switch in the UI look hung.
+    /// Returns as soon as the local `Timeline` is built — it shows
+    /// whatever's already in the local event cache from live sync, not
+    /// the server's full history, and does **not** backfill before
+    /// returning. It used to: a bounded, synchronous loop of up to 3
+    /// pages of `paginate_backwards` ran here on every open, each a real
+    /// network round-trip, so room-open visibly blocked on the network
+    /// (reverted 2026-11-15, after the owner asked why switching rooms
+    /// wasn't instant). Two real `matrix-rust-sdk` clients answer that
+    /// the same way: Element X's `RustTimeline.kt` shows the live
+    /// timeline immediately and only calls `paginate()` on a UI
+    /// scroll-to-top event; `git/robrix`'s `room_screen.rs` does the
+    /// same, dispatching its first backward-pagination request only
+    /// *after* the room is drawn. Backfill now happens the same way,
+    /// just one layer up: [`RoomTimeline::paginate_backwards`], driven by
+    /// the Dart-side `ActiveRoomController` as background work after the
+    /// room is already showing.
     pub async fn timeline_for(&self, room_id: &str) -> Result<RoomTimeline, ClientError> {
         let room_id = RoomId::parse(room_id).map_err(|source| ClientError::InvalidRoomId {
             room_id: room_id.to_owned(),
@@ -101,50 +96,40 @@ impl MatrixClient {
             .client
             .get_room(&room_id)
             .ok_or_else(|| ClientError::RoomNotFound(room_id.to_string()))?;
-        let timeline = Arc::new(room.timeline_builder().build().await?);
-        let cancel = CancellationToken::new();
+        let timeline = room.timeline_builder().build().await?;
+        Ok(RoomTimeline {
+            timeline,
+            cancel: CancellationToken::new(),
+        })
+    }
+}
 
-        // Without this, the timeline only shows whatever's already in
-        // the local event cache from live sync — no backfill from the
-        // server on open, so a room with history not yet seen by this
-        // session showed only its single most recent message. A single
-        // batch of 20 raw timeline events (state events, reactions, etc.
-        // included) often reduced to only one or two actual text
-        // messages after filtering, nowhere near "most of the history"
-        // other clients show on open — loop until either the start of
-        // the room's history is hit or a bounded number of events have
-        // been pulled in, rather than stopping after one shallow batch.
-        // Runs detached: the live `subscribe_messages`/`messages` reads
-        // already observe new pages as they land on this same shared
-        // `Timeline`, and racing against `cancel` means switching away
-        // from the room (which cancels this same token — see
-        // `RoomTimeline::stop`) stops the backfill promptly instead of
-        // continuing to hammer the server for a room nobody's looking at
-        // anymore.
-        let backfill_timeline = Arc::clone(&timeline);
-        let backfill_cancel = cancel.clone();
-        tokio::spawn(async move {
-            for _ in 0..MAX_BACKFILL_PAGES {
-                let hit_start = tokio::select! {
-                    _ = backfill_cancel.cancelled() => return,
-                    result = backfill_timeline.paginate_backwards(BACKFILL_PAGE_SIZE) => {
-                        match result {
-                            Ok(hit_start) => hit_start,
-                            // Best-effort background work — the room is
-                            // already open and usable with whatever
-                            // history it has; a failed backfill page
-                            // isn't worth surfacing as an error.
-                            Err(_) => return,
-                        }
-                    }
-                };
-                if hit_start {
-                    break;
-                }
-            }
-        });
+/// Snapshot of a live timeline's backward-pagination state. Mirrors
+/// (a simplified version of) `matrix_sdk::event_cache::PaginationStatus`
+/// — that type's own two variants, flattened to plain fields since
+/// that's a friendlier shape to cross the `flutter_rust_bridge` boundary
+/// with than an enum carrying data on only one arm.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct BackPaginationStatus {
+    /// `true` while a backward-pagination request is in flight.
+    pub is_paginating: bool,
+    /// `true` once the room's full history has been reached — further
+    /// [`RoomTimeline::paginate_backwards`] calls would be no-ops.
+    pub hit_timeline_start: bool,
+}
 
-        Ok(RoomTimeline { timeline, cancel })
+impl From<matrix_sdk::event_cache::PaginationStatus> for BackPaginationStatus {
+    fn from(status: matrix_sdk::event_cache::PaginationStatus) -> Self {
+        match status {
+            matrix_sdk::event_cache::PaginationStatus::Idle { hit_timeline_start } => Self {
+                is_paginating: false,
+                hit_timeline_start,
+            },
+            matrix_sdk::event_cache::PaginationStatus::Paginating => Self {
+                is_paginating: true,
+                hit_timeline_start: false,
+            },
+        }
     }
 }
 
@@ -238,10 +223,66 @@ impl RoomTimeline {
         (initial, snapshots)
     }
 
-    /// Stops any live [`RoomTimeline::subscribe_messages`] stream for
-    /// this handle. Call this before discarding a `RoomTimeline` the
-    /// caller is done with (switching rooms, closing the app) — see that
-    /// method's doc comment for why this matters.
+    /// Adds up to `num_events` older events to the start of the
+    /// timeline, fetching from the server if the local event cache
+    /// doesn't have enough. Returns whether this reached the start of
+    /// the room's history — once `true`, further calls are no-ops.
+    ///
+    /// A plain wrapper, not a queue or a lock: concurrent calls on the
+    /// same `RoomTimeline` are already safe without one, because
+    /// `matrix-sdk`'s own event cache single-flights them — a call that
+    /// arrives while one's in flight shares that request's result
+    /// rather than firing a second one (`event_cache::caches::pagination
+    /// ::Pagination::run_backwards_impl`'s `SharedPaginationStatus::
+    /// Paginating { shared_task }` branch, verified by reading
+    /// `matrix-sdk` 0.19.1's own source, not just its docs).
+    pub async fn paginate_backwards(&self, num_events: u16) -> Result<bool, ClientError> {
+        Ok(self.timeline.paginate_backwards(num_events).await?)
+    }
+
+    /// Returns the timeline's current backward-pagination state, plus a
+    /// stream that yields a fresh one on every change — same shape as
+    /// [`RoomTimeline::subscribe_messages`], for a caller to show a
+    /// "loading history"/"start of room" indicator without polling.
+    ///
+    /// `None` only for a timeline not in live mode (focused on one
+    /// event, a thread, or pinned events) — [`MatrixClient::timeline_for`]
+    /// always builds a live one, so this is `Some` in practice for every
+    /// `RoomTimeline` this crate hands out.
+    ///
+    /// Ends as soon as [`RoomTimeline::stop`] is called, same reasoning
+    /// as `subscribe_messages`'s doc comment: the underlying
+    /// `matrix-sdk-ui` stream only reveals a dropped listener on the
+    /// *next* status change, which may be never on a room nobody's
+    /// actively backfilling.
+    pub async fn subscribe_back_pagination_status(
+        &self,
+    ) -> Option<(
+        BackPaginationStatus,
+        impl Stream<Item = BackPaginationStatus> + use<'_>,
+    )> {
+        let (current, statuses) = self.timeline.live_back_pagination_status().await?;
+        let cancel = self.cancel.clone();
+        let snapshots = stream! {
+            tokio::pin!(statuses);
+            loop {
+                tokio::select! {
+                    _ = cancel.cancelled() => break,
+                    status = statuses.next() => {
+                        let Some(status) = status else { break };
+                        yield status.into();
+                    }
+                }
+            }
+        };
+        Some((current.into(), snapshots))
+    }
+
+    /// Stops any live [`RoomTimeline::subscribe_messages`]/
+    /// [`RoomTimeline::subscribe_back_pagination_status`] stream for this
+    /// handle. Call this before discarding a `RoomTimeline` the caller
+    /// is done with (switching rooms, closing the app) — see
+    /// `subscribe_messages`'s doc comment for why this matters.
     pub fn stop(&self) {
         self.cancel.cancel();
     }

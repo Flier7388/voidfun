@@ -104,10 +104,16 @@ data.
 - [x] Direct Messages tab (`Room::is_dm()`).
   *Remaining check:* a DM started from another client shows up with the
   other user's name (no DM-flagged room existed at verification time).
-- [ ] Windows desktop build actually works.
+- [x] Windows desktop build actually works.
   **Acceptance:** `flutter build windows` succeeds, the `.exe`
   launches, logs in and sends a message (CI runner or real machine).
-  The `flutter-windows-build` job exists in `ci.yml` but has never run.
+  Confirmed 2026-11-18: `flutter-windows-build` passes in CI (now
+  uploads the build as an artifact instead of discarding it), and the
+  owner ran that build on a real Windows machine — logged in and
+  reports it behaves the same as the Linux build. The first real
+  attempt hit a genuine bug this surfaced (a failed login left a stale
+  `matrix-sdk-sqlite` store behind, poisoning the next attempt with a
+  device-mismatch error) — fixed the same day.
 - [ ] Flutter app is built and widget-tested in CI on Linux + Windows.
   **Acceptance:** a CI run is green with `flutter analyze`,
   `flutter test` and a desktop build on both OSes.

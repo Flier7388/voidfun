@@ -60,17 +60,31 @@ class _MatrixClientAppState extends State<MatrixClientApp> {
       _client = null;
       _stage = _Stage.loggedOut;
     });
-    if (client != null) {
-      await stopSync(client: client);
-      // Deterministically drops the underlying Rust `MatrixClient` (and
-      // its `matrix-sdk-sqlite` connections) now, instead of whenever
-      // Dart's GC gets around to it — `clearSession()` is about to
-      // delete the store directory on disk, and on Windows a still-open
-      // SQLite handle makes that delete fail with a sharing violation
-      // (not an issue on Linux, which allows unlinking open files).
-      client.dispose();
+    // `HomeScreen.onLogout`/`RailNav.onLogout` are plain `VoidCallback`s
+    // (the leaf call site — a `PopupMenuItem.onTap` — only accepts a
+    // sync one anyway), so this method's `Future` is never awaited by
+    // its caller. A failure past this point would otherwise vanish as
+    // an unhandled Future rejection with no visible symptom at all —
+    // found via a real repro where `clearSession()` threw on Windows
+    // and the only sign was the *next* login hanging forever, nothing
+    // printed, nothing shown.
+    try {
+      if (client != null) {
+        await stopSync(client: client);
+        // Deterministically drops the underlying Rust `MatrixClient`
+        // (and its `matrix-sdk-sqlite` connections) now, instead of
+        // whenever Dart's GC gets around to it — `clearSession()` is
+        // about to delete the store directory on disk, and on Windows
+        // a still-open SQLite handle makes that delete fail with a
+        // sharing violation (not an issue on Linux, which allows
+        // unlinking open files).
+        client.dispose();
+      }
+      await clearSession();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Logout cleanup failed (session file/store may be stale): $e');
     }
-    await clearSession();
   }
 
   @override

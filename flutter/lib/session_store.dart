@@ -71,5 +71,25 @@ Future<void> clearSession() async {
   final file = await _sessionFile();
   if (await file.exists()) await file.delete();
   final store = Directory(await sqliteStorePath());
-  if (await store.exists()) await store.delete(recursive: true);
+  if (!await store.exists()) return;
+  // On Windows, a just-dropped `MatrixClient`'s background tasks (e.g.
+  // `matrix-sdk-ui`'s `SpaceService`, which only `abort_on_drop`s its
+  // room-update task rather than awaiting its exit) can still hold a
+  // SQLite file handle open for a brief window after `dispose()`
+  // returns. A delete attempted in that window hits a sharing
+  // violation partway through and — found via a real repro — leaves a
+  // *partially* deleted, corrupted store that then hangs (not errors)
+  // on the next open attempt, even across a full process restart, since
+  // nothing before this retried past that one bad attempt. A few
+  // retries with backoff ride out the transient lock instead of
+  // corrupting the store.
+  for (var attempt = 0; attempt < 5; attempt++) {
+    try {
+      await store.delete(recursive: true);
+      return;
+    } on FileSystemException {
+      if (attempt == 4) rethrow;
+      await Future.delayed(Duration(milliseconds: 200 * (attempt + 1)));
+    }
+  }
 }

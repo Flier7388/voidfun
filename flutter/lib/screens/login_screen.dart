@@ -46,6 +46,17 @@ class _LoginScreenState extends State<LoginScreen> {
       // `onLoggedIn` above so this can't double-dispose a client the
       // parent now owns.
       client?.dispose();
+      // `sqliteStorePath()` is a fixed path regardless of which attempt
+      // created it — same reasoning as `clearSession()`'s doc comment.
+      // Without this, *any* failed login (wrong password, a dropped
+      // connection, this exact store/device mismatch) leaves behind a
+      // store tied to whatever device that attempt's `login_username`
+      // call minted server-side before failing, and poisons every
+      // later attempt with matrix-sdk's "account in the store doesn't
+      // match the account in the constructor" guard — including a
+      // simple retry with the *correct* password. Found via a real
+      // Windows build: a fresh machine's first login attempt hit this.
+      await clearSession();
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
